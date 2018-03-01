@@ -21,11 +21,11 @@ under the License.
 	<modelVersion>4.0.0</modelVersion>
 	
 	<groupId>io.eventador</groupId>
-	<artifactId>flink-read-write-kafka</artifactId>
+	<artifactId>flink-streaming-planes-sql</artifactId>
 	<version>1.0-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
-	<name>Flink Read Write Kafka</name>
+	<name>Flink Streaming Plane SQL</name>
 	<url>https://eventador.io</url>
 
 	<properties>

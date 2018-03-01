@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Maven: org.apache.flink:flink-connector-kafka-base_2.11:1.4-SNAPSHOT">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/flink/flink-connector-kafka-base_2.11/1.4-SNAPSHOT/flink-connector-kafka-base_2.11-1.4-20171107.035858-169.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/flink/flink-connector-kafka-base_2.11/1.4-SNAPSHOT/flink-connector-kafka-base_2.11-1.4-20171107.035858-169-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/org/apache/flink/flink-connector-kafka-base_2.11/1.4-SNAPSHOT/flink-connector-kafka-base_2.11-1.4-20171107.035858-169-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
