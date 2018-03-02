@@ -2,6 +2,7 @@ package io.eventador;
 
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.table.api.TableSchema;
@@ -87,14 +88,14 @@ public class StreamingPlaneSQL {
             planeRow.print();
 
             // stream for feeding tumbling window count back to Kafka
-            //TupleTypeInfo<Tuple2<String, Long>> planeTupleType = new TupleTypeInfo<>(Types.STRING(), Types.LONG());
-            //DataStream<Tuple2<String, Long>> planeTuple = tableEnv.toAppendStream(flight_table, planeTupleType);
+            TupleTypeInfo<Tuple2<String, Long>> planeTupleType = new TupleTypeInfo<>(Types.STRING(), Types.LONG());
+            DataStream<Tuple2<String, Long>> planeTuple = tableEnv.toAppendStream(flight_table, planeTupleType);
 
             // send JSON-ified stream to Kafka
-            //planeTuple.addSink(new FlinkKafkaProducer010<>(
-            //            params.getRequired("write-topic"),
-            //            new PlaneSchema(),
-            //            params.getProperties())).name("Write Planes to Kafka");
+            planeTuple.addSink(new FlinkKafkaProducer010<>(
+                        params.getRequired("write-topic"),
+                        new PlaneSchema(),
+                        params.getProperties())).name("Write Planes to Kafka");
 
             env.execute("FlinkReadWriteKafkaJSON");
         }
