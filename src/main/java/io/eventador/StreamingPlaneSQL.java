@@ -11,7 +11,7 @@ import org.apache.flink.streaming.connectors.kafka.*;
 import org.apache.flink.streaming.connectors.kafka.partitioner.FlinkKafkaPartitioner;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
 import org.apache.flink.streaming.util.serialization.SerializationSchema;
-import org.apache.flink.streaming.util.serialization.JsonRowSerializationSchema;
+//import org.apache.flink.streaming.util.serialization.JsonRowSerializationSchema;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.Types;
