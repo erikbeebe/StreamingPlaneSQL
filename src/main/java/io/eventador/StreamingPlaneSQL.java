@@ -97,7 +97,7 @@ public class StreamingPlaneSQL {
                         new PlaneSchema(),
                         params.getProperties())).name("Write Planes to Kafka");
 
-            env.execute("FlinkReadWriteKafkaJSON");
+            env.execute("StreamingPlaneSQL");
         }
 
         // Simple JSONifer
