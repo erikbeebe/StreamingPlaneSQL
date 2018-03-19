@@ -1,36 +1,33 @@
 package io.eventador;
 
+import com.google.gson.Gson;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
-import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.connectors.kafka.*;
-import org.apache.flink.streaming.connectors.kafka.partitioner.FlinkKafkaPartitioner;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
-
 import org.apache.flink.streaming.connectors.kafka.Kafka011JsonTableSource;
-
+import org.apache.flink.streaming.connectors.kafka.KafkaTableSource;
 import org.apache.flink.streaming.util.serialization.SerializationSchema;
-//import org.apache.flink.streaming.util.serialization.JsonRowSerializationSchema;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.api.Types;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
 import org.apache.flink.table.sources.tsextractors.ExistingField;
 import org.apache.flink.table.sources.wmstrategies.BoundedOutOfOrderTimestamps;
 import org.apache.flink.types.Row;
 
-import com.google.gson.Gson;
-//import com.google.gson.GsonBuilder;
-
 import java.util.Properties;
 import java.util.UUID;
 
-public class StreamingPlaneSQL {
+//import org.apache.flink.streaming.util.serialization.JsonRowSerializationSchema;
+//import com.google.gson.GsonBuilder;
+
+public class StreamingPlaneTable {
         public static void main(String[] args) throws Exception {
             // Read parameters from command line
             final ParameterTool params = ParameterTool.fromArgs(args);
@@ -43,7 +40,7 @@ public class StreamingPlaneSQL {
             Properties kparams = params.getProperties();
             kparams.setProperty("auto.offset.reset", "earliest");
             //kparams.setProperty("flink.starting-position", "earliest");
-            //kparams.setProperty("group.id", UUID.randomUUID().toString());
+            kparams.setProperty("group.id", UUID.randomUUID().toString());
 
             // setup streaming environment
             StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -64,7 +61,7 @@ public class StreamingPlaneSQL {
                             .field("msg_type", Types.STRING())
                             .field("track", Types.STRING())
                             .field("timestamp", Types.SQL_TIMESTAMP())
-                            .field("altitude", Types.LONG())
+                            .field("altitude", Types.STRING())
                             .field("counter", Types.STRING())
                             .field("lon", Types.STRING())
                             .field("lat", Types.STRING())
@@ -72,10 +69,8 @@ public class StreamingPlaneSQL {
                             .field("speed", Types.STRING())
                             .field("mytimestamp", Types.SQL_TIMESTAMP())
                             .build())
-                    //.withRowtimeAttribute("mytimestamp", new ExistingField("timestamp"), new BoundedOutOfOrderTimestamps(30000L))
-                    .withKafkaTimestampAsRowtimeAttribute("mytimestamp", new BoundedOutOfOrderTimestamps(30000L))
+                    .withRowtimeAttribute("mytimestamp", new ExistingField("timestamp"), new BoundedOutOfOrderTimestamps(30000L))
                     .build();
-
 
             // register the table and apply sql to stream
             tableEnv.registerTableSource("flights", kafkaTableSource);
@@ -86,16 +81,12 @@ public class StreamingPlaneSQL {
             //        + "WHERE icao IS NOT null "
             //        + "GROUP BY TUMBLE(mytimestamp, INTERVAL '5' SECOND), icao";
 
-            String sql = "SELECT icao, count(icao) AS pings, "
-                    + "HOP_START(mytimestamp, INTERVAL '5' SECOND, INTERVAL '1' HOUR), "
-                    + "HOP_END(mytimestamp, INTERVAL '5' SECOND, INTERVAL '1' HOUR), "
-                    + "AVG(altitude) AS avgAltitude, "
-                    + "MAX(altitude) AS maxAltitude, "
-                    + "MIN(altitude) AS minAltitude "
+            String sql = "SELECT icao, count(icao) AS pings, altitude "
                     + "FROM flights "
                     + "WHERE icao IS NOT null "
                     + " AND altitude IS NOT null "
-                    + "GROUP BY HOP(mytimestamp, INTERVAL '5' SECOND, INTERVAL '1' HOUR), icao";
+                    + "GROUP BY TUMBLE(mytimestamp, INTERVAL '5' SECOND), icao, altitude ";
+
 
             Table flight_table = tableEnv.sql(sql);
 
@@ -104,21 +95,14 @@ public class StreamingPlaneSQL {
             planeRow.print();
 
             // stream for feeding tumbling window count back to Kafka
-            //TupleTypeInfo<Tuple2<String, Long>> planeTupleType = new TupleTypeInfo<>(Types.STRING(), Types.LONG());
-            //DataStream<Tuple2<String, Long>> planeTuple = tableEnv.toAppendStream(flight_table, planeTupleType);
+            TupleTypeInfo<Tuple2<String, Long>> planeTupleType = new TupleTypeInfo<>(Types.STRING(), Types.LONG());
+            DataStream<Tuple2<String, Long>> planeTuple = tableEnv.toAppendStream(flight_table, planeTupleType);
 
             // send JSON-ified stream to Kafka
-            /*
             planeTuple.addSink(new FlinkKafkaProducer010<>(
                         params.getRequired("write-topic"),
                         new PlaneSchema(),
                         params.getProperties())).name("Write Planes to Kafka");
-            */
-
-            planeRow.addSink(new FlinkKafkaProducer010<>(
-                    params.getRequired("write-topic"),
-                    new GhettoPlaneSchema(),
-                    params.getProperties())).name("Write Planes to Kafka");
 
             env.execute("StreamingPlaneSQL");
         }
@@ -136,13 +120,6 @@ public class StreamingPlaneSQL {
                 return payload.toJson(airplane).getBytes();
             }
         }
-
-    private static class GhettoPlaneSchema implements SerializationSchema<Row> {
-        @Override
-        public byte[] serialize(Row myRow) {
-            return myRow.toString().getBytes();
-        }
-    }
 
         // Container class for data model
         private static class Airplane {
