@@ -14,10 +14,7 @@ import org.apache.flink.streaming.api.functions.AssignerWithPunctuatedWatermarks
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.api.windowing.time.Time;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010;
-import org.apache.flink.streaming.connectors.kafka.Kafka011JsonTableSource;
-import org.apache.flink.streaming.connectors.kafka.KafkaTableSource;
+import org.apache.flink.streaming.connectors.kafka.*;
 import org.apache.flink.streaming.util.serialization.JSONDeserializationSchema;
 import org.apache.flink.streaming.util.serialization.SerializationSchema;
 import org.apache.flink.table.api.Table;
@@ -25,6 +22,7 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.api.Types;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
+import org.apache.flink.table.sinks.TableSink;
 import org.apache.flink.table.sources.wmstrategies.BoundedOutOfOrderTimestamps;
 import org.apache.flink.types.Row;
 
@@ -89,9 +87,16 @@ public class StreamingPlaneSQLDatastream {
             tableEnv.registerDataStream("planes", planeModel,
                     "icao, flight, timestamp_verbose, msg_type, track, timestamp, altitude, counter, lon, lat, speed, mytimestamp.rowtime");
 
+            // Define a TableSink
+            /*
+            String[] sinkFields = {"pings", "hopStart", "hopEnd", "avgAltitude", "maxAltitute", "minAltitude"}
+            TypeInformation[] sinkFieldTypes = { Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING(), Types.LONG(), Types.LONG(), Types.LONG() };
+            TableSink tSink = tableEnv.registerTableSink("kafkaSink", sinkFields, sinkFieldTypes, );
+            */
+
             String sql = "SELECT icao, count(icao) AS pings, "
-                    + "HOP_START(mytimestamp, INTERVAL '5' SECOND, INTERVAL '5' MINUTE), "
-                    + "HOP_END(mytimestamp, INTERVAL '5' SECOND, INTERVAL '5' MINUTE), "
+                    + "HOP_START(mytimestamp, INTERVAL '5' SECOND, INTERVAL '5' MINUTE) as hopStart, "
+                    + "HOP_END(mytimestamp, INTERVAL '5' SECOND, INTERVAL '5' MINUTE) hopEnd, "
                     + "AVG(altitude) AS avgAltitude, "
                     + "MAX(altitude) AS maxAltitude, "
                     + "MIN(altitude) AS minAltitude "
@@ -101,18 +106,17 @@ public class StreamingPlaneSQLDatastream {
                     + "GROUP BY HOP(mytimestamp, INTERVAL '5' SECOND, INTERVAL '5' MINUTE), icao";
 
             Table flight_table = tableEnv.sql(sql);
+            flight_table.writeToSink(
+                    new Kafka010JsonTableSink(
+                        "airplanes-json",
+                        kparams));
 
             // stdout debug stream, prints raw datastream to logs
             DataStream<Row> planeRow = tableEnv.toAppendStream(flight_table, Row.class);
             planeRow.print();
 
-            // send JSON-ified stream to Kafka
-            planeRow.addSink(new FlinkKafkaProducer010<>(
-                    params.getRequired("write-topic"),
-                    new PlainPlaneSchema(),
-                    params.getProperties())).name("Write Planes to Kafka");
-
-            env.execute("StreamingPlaneSQL");
+            String jobName = String.format("StreamingPlaneSQL -> Source topic: %s", params.get("read-topic"));
+            env.execute(jobName);
         }
 
     private static class PlaneMapper implements MapFunction<ObjectNode, PlaneModel> {
