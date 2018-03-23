@@ -22,6 +22,7 @@ import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.api.Types;
 import org.apache.flink.table.api.java.StreamTableEnvironment;
+import org.apache.flink.table.functions.ScalarFunction;
 import org.apache.flink.table.sinks.TableSink;
 import org.apache.flink.table.sources.wmstrategies.BoundedOutOfOrderTimestamps;
 import org.apache.flink.types.Row;
@@ -84,6 +85,7 @@ public class StreamingPlaneSQLDatastream {
                     .name("Timestamp -> KeyBy ICAO -> Map");
 
             //Table table = tableEnv.fromDataStream(jsonModel, "field1, field2, field3nested1, mytimestamp.rowtime");
+            tableEnv.registerFunction("isMilitary", new MilitaryPlanes.IsMilitary());
             tableEnv.registerDataStream("planes", planeModel,
                     "icao, flight, timestamp_verbose, msg_type, track, timestamp, altitude, counter, lon, lat, speed, mytimestamp.rowtime");
 
@@ -99,7 +101,8 @@ public class StreamingPlaneSQLDatastream {
                     + "HOP_END(mytimestamp, INTERVAL '5' SECOND, INTERVAL '5' MINUTE) hopEnd, "
                     + "AVG(altitude) AS avgAltitude, "
                     + "MAX(altitude) AS maxAltitude, "
-                    + "MIN(altitude) AS minAltitude "
+                    + "MIN(altitude) AS minAltitude, "
+                    + "isMilitary(icao) as IsMilitaryPlane "
                     + "FROM planes "
                     + "WHERE icao IS NOT null "
                     + " AND altitude IS NOT null "
@@ -108,7 +111,7 @@ public class StreamingPlaneSQLDatastream {
             Table flight_table = tableEnv.sql(sql);
             flight_table.writeToSink(
                     new Kafka010JsonTableSink(
-                        "airplanes-json",
+                        "airplanes_json",
                         kparams));
 
             // stdout debug stream, prints raw datastream to logs
@@ -118,6 +121,18 @@ public class StreamingPlaneSQLDatastream {
             String jobName = String.format("StreamingPlaneSQL -> Source topic: %s", params.get("read-topic"));
             env.execute(jobName);
         }
+
+    private static class MilitaryPlanes {
+            public static Boolean isMilitary(String icao) {
+                return icao.startsWith("AE");
+            }
+
+            public static class IsMilitary extends ScalarFunction {
+                public boolean eval(String icao) {
+                    return isMilitary(icao);
+                }
+            }
+    }
 
     private static class PlaneMapper implements MapFunction<ObjectNode, PlaneModel> {
         @Override
