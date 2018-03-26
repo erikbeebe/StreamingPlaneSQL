@@ -127,7 +127,7 @@ public class StreamingPlaneSQLDatastream {
             // Register an output sink to write JSON back to Kafka
             flight_table.writeToSink(
                     new Kafka010JsonTableSink(
-                        "airplanes_json",
+                        params.getRequired("write-topic"),
                         kparams));
             DataStream<Row> planeRow = tableEnv.toAppendStream(flight_table, Row.class);
 
