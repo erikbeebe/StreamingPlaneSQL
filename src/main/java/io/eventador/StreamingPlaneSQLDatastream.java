@@ -35,13 +35,30 @@ import java.util.UUID;
 //import org.apache.flink.streaming.util.serialization.JsonRowSerializationSchema;
 //import com.google.gson.GsonBuilder;
 
+/* Example JSON document:
+{
+  "flight": "UAL101",
+  "timestamp_verbose": "2018-03-26 09:37:51.409131",
+  "msg_type": "3",
+  "track": "",
+  "timestamp": 1522075071,
+  "altitude": "36000",
+  "counter": 35672,
+  "lon": "-97.62028",
+  "icao": "AC0DD9",
+  "vr": "",
+  "lat": "30.09942",
+  "speed": ""
+}
+ */
+
 public class StreamingPlaneSQLDatastream {
         public static void main(String[] args) throws Exception {
             // Read parameters from command line
             final ParameterTool params = ParameterTool.fromArgs(args);
 
             if(params.getNumberOfParameters() < 4) {
-                System.out.println("\nUsage: FlinkReadKafka --read-topic <topic> --write-topic <topic> --bootstrap.servers <kafka brokers> --group.id <groupid>");
+                System.out.println("\nUsage: StreamingPlaneSQLDatastream --read-topic <topic> --write-topic <topic> --bootstrap.servers <kafka brokers> --group.id <groupid>");
                 return;
             }
 
@@ -84,18 +101,14 @@ public class StreamingPlaneSQLDatastream {
                     .map(new PlaneMapper())
                     .name("Timestamp -> KeyBy ICAO -> Map");
 
-            //Table table = tableEnv.fromDataStream(jsonModel, "field1, field2, field3nested1, mytimestamp.rowtime");
+            // Add a function to differentiate between civilian aircraft, returns boolean
             tableEnv.registerFunction("isMilitary", new MilitaryPlanes.IsMilitary());
+
+            // Define fields to map virtual columns to
             tableEnv.registerDataStream("planes", planeModel,
                     "icao, flight, timestamp_verbose, msg_type, track, timestamp, altitude, counter, lon, lat, speed, mytimestamp.rowtime");
 
-            // Define a TableSink
-            /*
-            String[] sinkFields = {"pings", "hopStart", "hopEnd", "avgAltitude", "maxAltitute", "minAltitude"}
-            TypeInformation[] sinkFieldTypes = { Types.STRING(), Types.STRING(), Types.STRING(), Types.STRING(), Types.LONG(), Types.LONG(), Types.LONG() };
-            TableSink tSink = tableEnv.registerTableSink("kafkaSink", sinkFields, sinkFieldTypes, );
-            */
-
+            // Define query
             String sql = "SELECT icao, count(icao) AS pings, "
                     + "HOP_START(mytimestamp, INTERVAL '5' SECOND, INTERVAL '5' MINUTE) as hopStart, "
                     + "HOP_END(mytimestamp, INTERVAL '5' SECOND, INTERVAL '5' MINUTE) hopEnd, "
@@ -108,14 +121,17 @@ public class StreamingPlaneSQLDatastream {
                     + " AND altitude IS NOT null "
                     + "GROUP BY HOP(mytimestamp, INTERVAL '5' SECOND, INTERVAL '5' MINUTE), icao";
 
+            // Run continuous query
             Table flight_table = tableEnv.sql(sql);
+
+            // Register an output sink to write JSON back to Kafka
             flight_table.writeToSink(
                     new Kafka010JsonTableSink(
                         "airplanes_json",
                         kparams));
-
-            // stdout debug stream, prints raw datastream to logs
             DataStream<Row> planeRow = tableEnv.toAppendStream(flight_table, Row.class);
+
+            // Raw stdout for debugging
             planeRow.print();
 
             String jobName = String.format("StreamingPlaneSQL -> Source topic: %s", params.get("read-topic"));
@@ -124,7 +140,7 @@ public class StreamingPlaneSQLDatastream {
 
     private static class MilitaryPlanes {
             public static Boolean isMilitary(String icao) {
-                return icao.startsWith("AE");
+                return icao.toUpperCase().startsWith("AE");
             }
 
             public static class IsMilitary extends ScalarFunction {
@@ -161,7 +177,6 @@ public class StreamingPlaneSQLDatastream {
                     break;
             }
 
-            //System.out.println("MAPPED RECORD: " + plane.toString());
             return plane;
         }
     }

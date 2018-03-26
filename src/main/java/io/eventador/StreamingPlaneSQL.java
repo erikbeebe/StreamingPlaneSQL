@@ -117,7 +117,7 @@ public class StreamingPlaneSQL {
 
             planeRow.addSink(new FlinkKafkaProducer010<>(
                     params.getRequired("write-topic"),
-                    new GhettoPlaneSchema(),
+                    new SimplePlaneSchema(),
                     params.getProperties())).name("Write Planes to Kafka");
 
             env.execute("StreamingPlaneSQL");
@@ -137,7 +137,7 @@ public class StreamingPlaneSQL {
             }
         }
 
-    private static class GhettoPlaneSchema implements SerializationSchema<Row> {
+    private static class SimplePlaneSchema implements SerializationSchema<Row> {
         @Override
         public byte[] serialize(Row myRow) {
             return myRow.toString().getBytes();
